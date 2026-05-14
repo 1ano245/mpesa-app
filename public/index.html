@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>M-PESA Send Money</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+.card{background:white;border-radius:16px;overflow:hidden;width:100%;max-width:380px;box-shadow:0 4px 24px rgba(0,0,0,0.1)}
+.hdr{background:#4CAF50;padding:20px;display:flex;align-items:center;gap:12px}
+.hdr h1{color:white;font-size:18px;font-weight:600}
+.hdr p{color:rgba(255,255,255,0.8);font-size:12px;margin-top:2px}
+.body{padding:24px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:11px;font-weight:600;color:#777;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+.iw{display:flex;align-items:center;gap:10px;border:1.5px solid #e0e0e0;border-radius:10px;padding:11px 14px;transition:border-color 0.2s}
+.iw:focus-within{border-color:#4CAF50}
+.iw span{font-size:13px;font-weight:600;color:#4CAF50}
+.iw input{border:none;outline:none;flex:1;font-size:15px;color:#222;background:transparent}
+.arrow{text-align:center;color:#4CAF50;font-size:20px;margin:4px 0 12px}
+.fee{font-size:12px;color:#888;text-align:center;margin:-8px 0 16px;min-height:18px}
+.btn{width:100%;background:#4CAF50;color:white;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;transition:background 0.2s}
+.btn:active{background:#388E3C}
+.btn:disabled{background:#aaa;cursor:not-allowed}
+.sbox{margin-top:16px;border-radius:10px;padding:14px 16px;font-size:13px;display:none}
+.sbox.pending{background:#FFF8E1;color:#7a5c00;border:1px solid #ffe082}
+.sbox.success{background:#E8F5E9;color:#1b5e20;border:1px solid #a5d6a7}
+.sbox.error{background:#FFEBEE;color:#b71c1c;border:1px solid #ef9a9a}
+.stitle{font-weight:700;margin-bottom:4px;font-size:14px}
+.rrow{display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid rgba(0,0,0,0.06);margin-top:8px}
+.rrow span:first-child{opacity:0.7}
+.rrow span:last-child{font-weight:600}
+.again{display:none;width:100%;margin-top:10px;background:transparent;border:1.5px solid #4CAF50;color:#4CAF50;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="hdr">
+    <div>
+      <h1>M-PESA Send Money</h1>
+      <p>Safaricom · Real-time transfer</p>
+    </div>
+  </div>
+  <div class="body">
+    <div class="field">
+      <label>From (sender number)</label>
+      <div class="iw"><span>📱</span><input type="tel" id="sender" placeholder="e.g. 0712 345 678" maxlength="13"/></div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="field">
+      <label>To (recipient number)</label>
+      <div class="iw"><span>📲</span><input type="tel" id="recipient" placeholder="e.g. 0798 765 432" maxlength="13"/></div>
+    </div>
+    <div class="field">
+      <label>Amount (KES)</label>
+      <div class="iw"><span>KES</span><input type="number" id="amount" placeholder="0.00" min="1" max="300000"/></div>
+    </div>
+    <div class="fee" id="feeNote"></div>
+    <button class="btn" id="sendBtn" onclick="send()">Send Money</button>
+    <div class="sbox" id="sbox"><div class="stitle" id="stitle"></div><div id="sbody"></div></div>
+    <button class="again" id="againBtn" onclick="reset()">Send another</button>
+  </div>
+</div>
+<script>
+var poll=null;
+function fmt(n){return parseFloat(n).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fee(a){if(a<=100)return 0;if(a<=500)return 7;if(a<=1000)return 13;if(a<=1500)return 23;if(a<=2500)return 33;if(a<=3500)return 53;if(a<=5000)return 57;if(a<=7500)return 78;if(a<=10000)return 90;if(a<=15000)return 100;if(a<=20000)return 105;return 108;}
+document.getElementById('amount').addEventListener('input',function(){var v=parseFloat(this.value);var el=document.getElementById('feeNote');el.textContent=v>0?'Fee: KES '+fmt(fee(v))+' · Total: KES '+fmt(v+fee(v)):'';});
+function showS(type,title,body){var b=document.getElementById('sbox');b.className='sbox '+type;b.style.display='block';document.getElementById('stitle').textContent=title;document.getElementById('sbody').innerHTML=body;}
+async function send(){
+  var s=document.getElementById('sender').value.trim();
+  var r=document.getElementById('recipient').value.trim();
+  var a=document.getElementById('amount').value.trim();
+  if(!s||!r||!a){showS('error','Missing fields','Please fill in all fields.');return;}
+  var btn=document.getElementById('sendBtn');
+  btn.disabled=true;btn.textContent='Sending...';
+  document.getElementById('sbox').style.display='none';
+  document.getElementById('againBtn').style.display='none';
+  try{
+    var res=await fetch('/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sender:s,recipient:r,amount:a})});
+    var data=await res.json();
+    if(!res.ok||data.error){showS('error','Failed',data.error||'Something went wrong.');btn.disabled=false;btn.textContent='Send Money';return;}
+    showS('pending','⏳ Waiting for PIN…','STK Push sent to <strong>'+s+'</strong>. Ask them to enter their M-PESA PIN.');
+    btn.textContent='Waiting...';
+    pollStatus(data.checkoutRequestId);
+  }catch(e){showS('error','Network error','Could not reach server.');btn.disabled=false;btn.textContent='Send Money';}
+}
+function pollStatus(id){
+  var tries=0;
+  poll=setInterval(async function(){
+    tries++;
+    try{
+      var res=await fetch('/status/'+id);
+      var data=await res.json();
+      if(data.status==='success'){
+        clearInterval(poll);
+        showS('success','✅ Sent!','<div class="rrow"><span>Receipt</span><span>'+(data.receipt||'N/A')+'</span></div><div class="rrow"><span>Amount</span><span>KES '+fmt(data.amount)+'</span></div><div class="rrow"><span>Phone</span><span>'+data.phone+'</span></div>');
+        document.getElementById('sendBtn').style.display='none';
+        document.getElementById('againBtn').style.display='block';
+      }else if(data.status==='failed'){
+        clearInterval(poll);
+        showS('error','❌ Failed',data.reason||'Transaction declined.');
+        var btn=document.getElementById('sendBtn');btn.disabled=false;btn.textContent='Try Again';
+      }else if(tries>=24){clearInterval(poll);showS('error','Timed out','No PIN entered after 2 minutes.');var btn=document.getElementById('sendBtn');btn.disabled=false;btn.textContent='Send Money';}
+    }catch(e){}
+  },5000);
+}
+function reset(){clearInterval(poll);['sender','recipient','amount'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('feeNote').textContent='';document.getElementById('sbox').style.display='none';document.getElementById('againBtn').style.display='none';var btn=document.getElementById('sendBtn');btn.style.display='block';btn.disabled=false;btn.textContent='Send Money';}
+</script>
+</body>
+</html>
